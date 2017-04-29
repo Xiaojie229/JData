@@ -9,6 +9,7 @@ import pickle
 import gc
 import pandas as pd
 from datetime import timedelta
+from datetime import datetime
 from getLabel import get_user_head_label
 
 def get_action_data():
@@ -37,50 +38,68 @@ def convert_age(age):
     else:
         return -1
 
-def get_user_basic_feature(user_head,user_data):
+def get_user_basic_feature(user_data,end_date):
     """
     用户基本特征
     """
-#==============================================================================
-#     user_data=pd.merge(user_head,user_data,how='left',on='user_id')
-#     user_data.age=user_data.age.map(convert_age)
-#     age_df=pd.get_dummies(user_data['age'],prefix='age')
-#     user_data=pd.concat([user_data['user_id'],age_df,user_data['sex'],user_data['user_lv_cd']],axis=1)
-#     user_data.to_csv('./cache/user_basic_feature.csv',index=False)
-#     file=open('./cache/pickle/user_basic_feature.pkl','wb')
-#     pickle.dump(user_data,file)
-#==============================================================================
+    df=user_data[['user_id','user_reg_tm']]
+    df=df.map(pd.to_datetime)
+    df.user_reg_tm=(end_date-df.user_reg_tm)
+    user_data.age=user_data.age.map(convert_age)
+    age_df=pd.get_dummies(user_data['age'],prefix='age')
+    user_data=pd.concat([user_data['user_id'],age_df,user_data['sex'],user_data['user_lv_cd'],df['user_reg_tm']],axis=1)
+    user_data.to_csv('./cache/user_basic_feature.csv',index=False)
+    file=open('./cache/pickle/user_basic_feature.pkl','wb')
+    pickle.dump(user_data,file)
     user_data=pickle.load(open('./cache/pickle/user_basic_feature.pkl','rb'))
     return user_data    
     
-def get_user_action_feature_detail(user_head,action_df,start_date,end_date):
+def get_user_action_feature_detail(action_df,start_date,end_date):
+    str_start_data=start_date.strftime('%Y_%m_%d_%H_%M_%S')
+    str_end_data=end_date.strftime('%Y_%m_%d_%H_%M_%S')
     action_df=action_df[(action_df.time>=start_date)&(action_df.time<end_date)]
-    action_df=pd.merge(user_head,action_df,how='left',on='user_id')
-    
+
 #   购买量，点击量，加购量等    
     type_df=action_df[['user_id','type']]
     df=pd.get_dummies(type_df['type'],prefix='type')
     type_df=pd.concat([type_df,df],axis=1)
     type_df=type_df.groupby('user_id',as_index=False).sum()
     del type_df['type']
+    user_head=type_df[['user_id']]
+    del type_df['user_id']
+    type_df.rename(columns=lambda x: x.replace(x,x+"_%s-%s"%(str_start_data,str_end_data)),inplace=True)
+    type_df=pd.concat([user_head,type_df],axis=1)
+    type_df.to_csv('./cache/%s_%s_type_df.csv'%(str_start_data,str_end_data),index=False)
+    file=open('./cache/pickle/%s_%s_type_df.pkl'%(str_start_data,str_end_data),'wb')
+    pickle.dump(type_df,file)
     
 #   购买量占行为比率
-    ratio=['user_id','buy_type1_ratio','buy_type2_ratio','buy_type3_ratio','buy_type5_ratio''buy_type6_ratio']
+    ratio=['user_id','buy_type1_ratio','buy_type2_ratio','buy_type3_ratio','buy_type5_ratio','buy_type6_ratio']
     buy_ratio=pd.concat([action_df['user_id'],df],axis=1)
     buy_ratio=buy_ratio.groupby(['user_id'],as_index=False).sum()
     buy_ratio['buy_type1_ratio']=buy_ratio['type_4']/buy_ratio['type_1']
-    buy_ratio['buy_type2_ratio']=buy_ratio['type_4']/buy_ratio['type_2']
-    
+    buy_ratio['buy_type2_ratio']=buy_ratio['type_4']/buy_ratio['type_2'] 
     buy_ratio['buy_type3_ratio']=buy_ratio['type_4']/buy_ratio['type_3']
     buy_ratio['buy_type5_ratio']=buy_ratio['type_4']/buy_ratio['type_5']
     buy_ratio['buy_type6_ratio']=buy_ratio['type_4']/buy_ratio['type_6']
     buy_ratio=buy_ratio[ratio]
+    user_head=buy_ratio[['user_id']]
+    del buy_ratio['user_id']
+    buy_ratio.rename(columns=lambda x: x.replace(x,x+"_%s-%s"%(str_start_data,str_end_data)),inplace=True)
+    buy_ratio=pd.concat([user_head,buy_ratio],axis=1)
+    buy_ratio.to_csv('./cache/%s_%s_buy_ratio.csv'%(str_start_data,str_end_data),index=False)
+    file=open('./cache/pickle/%s_%s_buy_ratio.pkl'%(str_start_data,str_end_data),'wb')
+    pickle.dump(buy_ratio,file)
     
     feature=pd.merge(type_df,buy_ratio,how='left',on='user_id')
     del buy_ratio,df
     gc.collect()
 
 #   成交数与其总访问数之比
+    type_df=action_df[['user_id','type']]
+    df=pd.get_dummies(type_df['type'],prefix='type')
+    type_df=pd.concat([type_df,df],axis=1)
+    del type_df['type']
     buy_type_ratio=action_df[['user_id']]
     type_data=type_df[['type_1','type_2','type_3','type_5','type_6']]
     type_data=type_data.sum(axis=1)
@@ -157,13 +176,17 @@ def get_user_action_feature_detail(user_head,action_df,start_date,end_date):
     gc.collect()
     
 # TODO 购买类别数/访问类别数
-    feature.rename(columns=lambda x: x.replace(x,x+"_%s-%s"%(start_date,end_date)),inplace=True)
-    feature.to_csv('./cache/%s_%s_feature.csv'%(start_date,end_date),index=False)
-    file=open('./cache/pickle/%s_%s_feature.pkl'%(start_date,end_date),'wb')
+    user_head=feature[['user_id']]
+    del feature['user_id']
+    feature.rename(columns=lambda x: x.replace(x,x+"_%s-%s"%(str_start_data,str_end_data)),inplace=True)
+    feature=pd.concat([user_head,feature],axis=1)
+    feature.fillna(0)
+    feature.to_csv('./cache/%s_%s_feature.csv'%(str_start_data,str_end_data),index=False)
+    file=open('./cache/pickle/%s_%s_feature.pkl'%(str_start_data,str_end_data),'wb')
     pickle.dump(feature,file)
     return feature    
 
-def get_user_action_feature(user_head,action_data,end_date):
+def get_user_action_feature(action_data,end_date):
     """
     提取用户行为特征
     """
@@ -172,14 +195,14 @@ def get_user_action_feature(user_head,action_data,end_date):
     for i in (1,2,3,5,7,14,21,30):
         start_date=end_date-timedelta(days=i)
         if user_action_feature is None:
-            user_action_feature=get_user_action_feature_detail(user_head,action_data,start_date,end_date)
+            user_action_feature=get_user_action_feature_detail(action_data,start_date,end_date)
         else:
-            user_action_feature=pd.merge(user_action_feature,get_user_action_feature_detail(user_head,action_data,start_date,end_date),
+            user_action_feature=pd.merge(user_action_feature,get_user_action_feature_detail(action_data,start_date,end_date),
                                     how='left',on='user_id')
     for i in (1,2,3):
         end_date=end_date-timedelta(days=i)
         start_date=end_date-timedelta(days=1)
-        user_action_feature=pd.merge(user_action_feature,get_user_action_feature_detail(user_head,action_data,start_date,end_date),
+        user_action_feature=pd.merge(user_action_feature,get_user_action_feature_detail(action_data,start_date,end_date),
                                     how='left',on='user_id')
     user_action_feature.to_csv('./cache/user_action_feature.csv',index=False)
     file=open('./cache/pickle/user_action_feature.pkl','wb')
@@ -193,8 +216,9 @@ def get_user_feature():
     action_data=get_action_data()
     user_head=get_user_head_label(action_data,start_date,mid_date,end_date)
     user_data=get_user_data()
-    user_basic_feature=get_user_basic_feature(user_head,user_data)
-    user_action_feature=get_user_action_feature(user_head,action_data,end_date)
+    user_data=pd.merge(user_head,user_data,how='left',on='user_id')
+    user_basic_feature=get_user_basic_feature(user_data,end_date)
+    user_action_feature=get_user_action_feature(action_data,end_date)
     user_feature=pd.merge(user_basic_feature,user_action_feature,how='left',on='user_id')
     del user_basic_feature,user_action_feature
     gc.collect()
@@ -203,5 +227,9 @@ def get_user_feature():
     pickle.dump(user_feature,file)
     return user_feature
     
+def test():
+    pass
+    
 if __name__=="__main__":
     get_user_feature()
+#    test()

@@ -11,7 +11,6 @@ import pickle
 import pandas as pd
 
 def prepare_action_all():
-#    os.mkdir('./cache')
     os.mkdir('./cache/pickle')
     action2=pd.read_csv('./data/JData_Action_201602.csv',encoding='gbk')
     action2['user_id']=action2['user_id'].map(int)
