@@ -212,13 +212,38 @@ def get_user_action_feature(action_data,end_date):
 def get_user_feature():
     end_date=pd.to_datetime('2016-04-13 00:00:00')
     mid_date=pd.to_datetime('2016-04-10 00:00:00')
-    start_date=pd.to_datetime('2016-04-05 00:00:00')  
+    start_date=pd.to_datetime('2016-04-05 00:00:00')
+    
     action_data=get_action_data()
     user_head=get_user_head_label(action_data,start_date,mid_date,end_date)
     user_data=get_user_data()
-    user_data=pd.merge(user_head,user_data,how='left',on='user_id')
-    user_basic_feature=get_user_basic_feature(user_data,end_date)
-    user_action_feature=get_user_action_feature(action_data,end_date)
+    
+    user_basic_data=pd.merge(user_head,user_data,how='left',on='user_id')
+    del user_data
+    gc.collect()
+    user_basic_data.to_csv('./cache/user_basic_data.csv',index=False)
+    file=open('./cache/pickle/user_basic_data.pkl','wb')
+    pickle.dump(user_basic_data,file)
+    user_basic_feature=get_user_basic_feature(user_basic_data,end_date)
+    del user_basic_data
+    gc.collect()
+    user_basic_feature.to_csv('./cache/user_basic_feature.csv',index=False)
+    file=open('./cache/pickle/user_basic_feature.pkl','wb')
+    pickle.dump(user_basic_feature,file)
+    
+    user_action_data=pd.merge(user_head,action_data,how='left',on='user_id')
+    del action_data
+    gc.collect()
+    user_action_data.to_csv('./cache/user_action_data.csv',index=False)
+    file=open('./cache/pickle/user_action_data.pkl','wb')
+    pickle.dump(user_action_data,file)
+    user_action_feature=get_user_action_feature(user_action_data,end_date)
+    del user_action_data
+    gc.collect()
+    user_action_feature.to_csv('./cache/user_action_feature.csv',index=False)
+    file=open('./cache/pickle/user_action_feature.pkl','wb')
+    pickle.dump(user_action_feature,file)
+    
     user_feature=pd.merge(user_basic_feature,user_action_feature,how='left',on='user_id')
     del user_basic_feature,user_action_feature
     gc.collect()
